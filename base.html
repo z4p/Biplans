@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <script type="text/javascript" src="jquery.min.js"></script>
+    <script type="text/javascript" src="biplans.js"></script>
+	<script type="text/javascript">
+		$(document).ready( function() {
+			console.log('Good news for everyone!');
+
+			window.eng = new engine();
+			window.eng.init(document.getElementById('canvasArea'), 20);
+		} );
+	</script>
+    <title>Biplanes</title>
+</head>
+
+<body>
+    <div align="center">
+        <canvas id="canvasArea" width="640" height="480">
+            <span style="color:red">Your browser doesn't supported HTML5 Canvas</span>
+        </canvas><br>
+		<a href="#" id="start">Старт</a>
+    </div>
+</body>
+</html>
