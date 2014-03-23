@@ -31,18 +31,19 @@ function bullet(ctx, img, x, y, angle) {
 	}
 }
 
-function biplane(ctx, img_src, bullet_src) {
+function biplane(ctx, img_src, bullet_src, orient, bullets) {
+	this.orient = orient;			// Orientation is [direct | reverse] = [true | false]
 	this.width = 50; 				// width of plane, we're drawing
-	this.heigth = 25; 				// heigth of plane, we're drawing
-	//this.origSize = 200;  			// size of plane at image's map
+	this.heigth = this.width/2;		// heigth of plane, we're drawing
 	this.img = new Image(); 		// biplan's image
 	this.img.src = img_src;
+	this.bullets = bullets;			// array of bullets
 	this.bullet_img = new Image(); 	// bullet's image
 	this.bullet_img.src = bullet_src;
 	this.ctx = ctx;		   			// drawing context
-	this.X = 20;   					// position X (left border)
+	this.X = orient ? 20 : 620-this.width; 	// position X (left border)
 	this.Y = 450 - this.heigth;		// position Y (top border)
-	this.angle = 0; 				// determine number of image (at image's map = PI/6)
+	this.angle = orient ? 0 : 6; 	// angle of direction
 	this.weight = 7;				// plane's weight
 	this.F = 0;						// traction force
 	this.airRes = 0;				// air's resistance
@@ -50,7 +51,6 @@ function biplane(ctx, img_src, bullet_src) {
 	this.vy = 0; 					// speed Y / sec
 	this.V = 0;						// speed
 	this.dir = 0;					// speed's direction
-	this.bullets = [];				// array of bullets
 	this.reloadTime = 1;			// time to reload
 	this.reload = 1;				// reload progress [0..reloadTime]
 	this.isSky = false; 			// is this plane in the sky?
@@ -68,7 +68,8 @@ function biplane(ctx, img_src, bullet_src) {
 	}
 	
 	this.rotate = function(dr) { // dr = {-1,1}
-		if (!this.isSky && (this.angle + dr < 0 || this.angle + dr > 1)) return;
+		if (!this.isSky && this.orient && (this.angle + dr < 0 || this.angle + dr > 1)) return;
+		if (!this.isSky && !this.orient && (this.angle + dr > 6 || this.angle + dr < 5)) return;
 		this.angle = (this.angle + dr + 12) % 12;
 		// if we're not falling, we should change direction of speed
 		if (this.isFlying) {
@@ -79,24 +80,20 @@ function biplane(ctx, img_src, bullet_src) {
 	}
 	
 	this.draw = function() {
-		var imgY = Math.floor(this.angle/6);
-		var imgX = (imgY == 0 ? this.angle%6 : 5-(this.angle%6));		
-		for (var i = 0; i < this.bullets.length; i++) {
-			this.bullets[i].draw();
-		}
-
-		this.ctx.translate(this.X, this.Y);
-		this.ctx.rotate(-this.angle*Math.PI/6);
+		var rotAngle = this.orient ? this.angle : this.angle-6;
+		
+		this.ctx.translate(this.X+this.width/2, this.Y+this.heigth/2);
+		this.ctx.rotate(-rotAngle*Math.PI/6);
 		this.ctx.drawImage(this.img, -this.width/2, -this.heigth/2, this.width, this.heigth);
-		this.ctx.rotate(this.angle*Math.PI/6);
-		this.ctx.translate(-this.X, -this.Y);
+		this.ctx.rotate(rotAngle*Math.PI/6);
+		this.ctx.translate(-this.X-this.width/2, -this.Y-this.heigth/2);
 
 		if (this.X > 640 - this.width) {
-			this.ctx.translate(this.X-640, this.Y);
-			this.ctx.rotate(-this.angle*Math.PI/6);
+			this.ctx.translate(this.X+this.width/2-640, this.Y+this.heigth/2);
+			this.ctx.rotate(-rotAngle*Math.PI/6);
 			this.ctx.drawImage(this.img, -this.width/2, -this.heigth/2, this.width, this.heigth);
-			this.ctx.rotate(this.angle*Math.PI/6);
-			this.ctx.translate(-this.X+640, -this.Y);	
+			this.ctx.rotate(rotAngle*Math.PI/6);
+			this.ctx.translate(-this.X-this.width/2+640, -this.Y-this.heigth/2);	
 		}
 	}
 	
@@ -159,7 +156,7 @@ function biplane(ctx, img_src, bullet_src) {
 			this.X = 0;
 			//this.vx = 0;
 		}
-		if (this.Y >= 460 - this.heigth)
+		if (this.Y >= 450 - this.heigth)
 			if (this.isSky)	{
 				this.isAlive = false;
 				console.log("BOOOM!");
@@ -167,14 +164,8 @@ function biplane(ctx, img_src, bullet_src) {
 				if (this.vy > 0) {
 					this.vy = 0;
 				}
-				this.Y = 460 - this.heigth;
+				this.Y = 450 - this.heigth;
 			}
-		for (var i = 0; i < this.bullets.length; i++) {
-			this.bullets[i].tick(dt);
-			if (!this.bullets[i].enable) {
-				this.bullets.shift();
-			}
-		}
 		if (this.reload < this.reloadTime) {
 			this.reload += dt;
 		}
@@ -182,11 +173,14 @@ function biplane(ctx, img_src, bullet_src) {
 }
 
 engine.prototype = {
+	curTime: null,
     domElement: null,
     ctx: null,
     timer: null,
-	user: null,
+	user1: null,
+	user2: null,
     biplanes: [],
+	bullets: [],		// array of bullets
 	bgimage: null,
 	bgimage_src: "images/bg.png",
     paused: false,
@@ -208,20 +202,36 @@ engine.prototype = {
     keyPress: function(key) {
         switch (key)
         {
-            case 38: // up
-				this.user.incPower();
+            case 87: // W
+				this.user1.incPower();
                 break;
-            case 39: // right
-				this.user.rotate(-1);
+            case 83: // S
+				this.user1.decPower();
+                break;
+            case 65: // A
+				this.user1.rotate(1);
+                break;
+            case 68: // D
+				this.user1.rotate(-1);
+                break;
+            case 90: // Z
+                this.user1.shot();
+                break;
+
+			case 38: // up
+				this.user2.incPower();
                 break;
             case 40: // down
-				this.user.decPower();
+				this.user2.decPower();
                 break;
             case 37: // left
-				this.user.rotate(1);
+				this.user2.rotate(1);
                 break;
-            case 16: // LShift
-                this.user.shot();
+            case 39: // right
+				this.user2.rotate(-1);
+                break;
+            case 190: // ?/
+                this.user2.shot();
                 break;
         }
     },
@@ -260,19 +270,44 @@ engine.prototype = {
 	
     redraw: function()
     {
+		var tm = (new Date()).getTime();
+		var dt = this.curTime - tm;
+		this.curTime = tm;
+		dt = 0.1;
+	
         this.ctx.drawImage(this.bgimage, 0, 0);
+		
+		for (var i = 0; i < this.bullets.length; i++) {
+			this.bullets[i].tick(dt);
+			if (!this.bullets[i].enable) {
+				this.bullets.shift();
+			} else {
+				this.bullets[i].draw();
+			}
+		}
 
-		// compute user's biplan's info
-		if (this.user != null) {
-			this.user.step(0.1);
-			if (!this.user.isAlive) {
+		if (this.user1 != null) {
+			this.user1.step(dt);
+			if (!this.user1.isAlive) {
 				this.audio.fly_high1.pause();
 				this.audio.fly_high2.pause();
 				this.audio.explode.play();
-				this.user = null;
-				alert("You lose!");
+				this.user1 = null;
+				//alert("You lose!");
 			} else {
-				this.user.draw();
+				this.user1.draw();
+			}
+		}
+		if (this.user2 != null) {
+			this.user2.step(dt);
+			if (!this.user2.isAlive) {
+				this.audio.fly_high1.pause();
+				this.audio.fly_high2.pause();
+				this.audio.explode.play();
+				this.user2 = null;
+				//alert("You lose!");
+			} else {
+				this.user2.draw();
 			}
 		}
 		
@@ -282,16 +317,16 @@ engine.prototype = {
 				this.audio.explode.play();
 				this.biplanes.splice(i,1);
 			}
-			this.biplanes[i].step(0.1);
+			this.biplanes[i].step(dt);
 			this.biplanes[i].draw();
 		}
 		
-		if (this.user != null) {
-			this.ctx.fillText('Speed: '+this.user.V+' ('+this.user.vx+', '+this.user.vy+')', 5, 20);
-			this.ctx.fillText('Pos: ('+this.user.X+', '+this.user.Y+')', 5, 40);
-			this.ctx.fillText('Angle/Direction: '+this.user.angle+'/'+this.user.dir, 5, 60);
-			this.ctx.fillText('Force: '+this.user.F, 5, 80);
-			this.ctx.fillText('Sky/Fly/Alive: '+this.user.isSky+'/'+this.user.isFlying+'/'+this.user.isAlive, 5, 100);
+		if (this.user2 != null) {
+			this.ctx.fillText('Speed: '+this.user2.V+' ('+this.user2.vx+', '+this.user2.vy+')', 5, 20);
+			this.ctx.fillText('Pos: ('+this.user2.X+', '+this.user2.Y+')', 5, 40);
+			this.ctx.fillText('Angle/Direction: '+this.user2.angle+'/'+this.user2.dir, 5, 60);
+			this.ctx.fillText('Force: '+this.user2.F, 5, 80);
+			this.ctx.fillText('Sky/Fly/Alive: '+this.user2.isSky+'/'+this.user2.isFlying+'/'+this.user2.isAlive, 5, 100);
 		}
 
         if (this.paused) {
@@ -310,19 +345,21 @@ engine.prototype = {
     start: function()
     {
         var that = this;
-		this.user = new biplane(this.ctx, "images/biplan1.png", "images/bullet.png"); 
+		this.curTime = (new Date()).getTime();
+		this.user1 = new biplane(this.ctx, "images/biplan1.png", "images/bullet.png", true, this.bullets); 
+		this.user2 = new biplane(this.ctx, "images/biplan2.png", "images/bullet.png", false, this.bullets); 
         this.paused = false;
         this.redraw();
-		setTimeout(
+/*		setTimeout(
 			function() {
 				that.audio.fly_high1.loop = true;
-//				that.audio.fly_high1.play();
+				that.audio.fly_high1.play();
 				setTimeout(function(){
 					that.audio.fly_high2.loop = true;
-//					that.audio.fly_high2.play();
+					that.audio.fly_high2.play();
 				}, 1200);
 			}, 3000);
-		this.audio.fly_ready.play();
+		this.audio.fly_ready.play(); */
     },
 
     stop: function()
