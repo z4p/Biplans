@@ -15,31 +15,33 @@ function bullet(ctx, img, x, y, angle) {
 	this.X = Math.floor(x);
 	this.Y = Math.floor(y);
 	this.enable = true;
-	console.log("Bullet has run "+this.X+':'+this.Y+' d('+this.vx+':'+this.vy+') a('+angle+')');
+	console.log("New bullet "+this.X+':'+this.Y+' d('+this.vx+':'+this.vy+') a('+angle+')');
 	
 	this.draw = function() {
 		this.ctx.drawImage(this.img, this.X, this.Y);
 	}
+	
 	this.tick = function(dt) {
 		this.X += this.vx * dt;
 		this.Y += this.vy * dt;
 		
 		if (this.X<0 || this.X>640 || this.Y<0 || this.Y>450) {
-			this.enable = false; //so, now we're able to forgive this bullet ;-(
+			this.enable = false; //so, now we should forgive this bullet ;-(
 		}
 	}
 }
 
 function biplane(ctx, img_src, bullet_src) {
-	this.size = 50; 				// size of plane, we're drawing
-	this.origSize = 200;  			// size of plane at image's map
-	this.img = new Image(); 		// image's map
+	this.width = 50; 				// width of plane, we're drawing
+	this.heigth = 25; 				// heigth of plane, we're drawing
+	//this.origSize = 200;  			// size of plane at image's map
+	this.img = new Image(); 		// biplan's image
 	this.img.src = img_src;
-	this.bullet_img = new Image(); 	// bullet image
+	this.bullet_img = new Image(); 	// bullet's image
 	this.bullet_img.src = bullet_src;
 	this.ctx = ctx;		   			// drawing context
 	this.X = 20;   					// position X (left border)
-	this.Y = 450 - this.size;		// position Y (top border)
+	this.Y = 450 - this.heigth;		// position Y (top border)
 	this.angle = 0; 				// determine number of image (at image's map = PI/6)
 	this.weight = 7;				// plane's weight
 	this.F = 0;						// traction force
@@ -82,20 +84,26 @@ function biplane(ctx, img_src, bullet_src) {
 		for (var i = 0; i < this.bullets.length; i++) {
 			this.bullets[i].draw();
 		}
-		this.ctx.drawImage(this.img,
-			imgX*this.origSize, imgY*this.origSize, this.origSize, this.origSize,
-			this.X, this.Y, this.size, this.size);
-		if (this.X > 640 - this.size) {
-			this.ctx.drawImage(this.img,
-				imgX*this.origSize, imgY*this.origSize, this.origSize, this.origSize,
-				this.X-640, this.Y, this.size, this.size);		
+
+		this.ctx.translate(this.X, this.Y);
+		this.ctx.rotate(-this.angle*Math.PI/6);
+		this.ctx.drawImage(this.img, -this.width/2, -this.heigth/2, this.width, this.heigth);
+		this.ctx.rotate(this.angle*Math.PI/6);
+		this.ctx.translate(-this.X, -this.Y);
+
+		if (this.X > 640 - this.width) {
+			this.ctx.translate(this.X-640, this.Y);
+			this.ctx.rotate(-this.angle*Math.PI/6);
+			this.ctx.drawImage(this.img, -this.width/2, -this.heigth/2, this.width, this.heigth);
+			this.ctx.rotate(this.angle*Math.PI/6);
+			this.ctx.translate(-this.X+640, -this.Y);	
 		}
 	}
 	
 	this.shot = function() {
 		if (this.reload >= this.reloadTime) {
 			this.reload = 0;
-			this.bullets.push(new bullet(this.ctx, this.bullet_img, this.X+this.size/2, this.Y+this.size/2, this.angle));
+			this.bullets.push(new bullet(this.ctx, this.bullet_img, this.X+this.width/2, this.Y+this.heigth/2, this.angle));
 		}
 	}
 	
@@ -151,7 +159,7 @@ function biplane(ctx, img_src, bullet_src) {
 			this.X = 0;
 			//this.vx = 0;
 		}
-		if (this.Y >= 450 - this.size)
+		if (this.Y >= 460 - this.heigth)
 			if (this.isSky)	{
 				this.isAlive = false;
 				console.log("BOOOM!");
@@ -159,7 +167,7 @@ function biplane(ctx, img_src, bullet_src) {
 				if (this.vy > 0) {
 					this.vy = 0;
 				}
-				this.Y = 450 - this.size;
+				this.Y = 460 - this.heigth;
 			}
 		for (var i = 0; i < this.bullets.length; i++) {
 			this.bullets[i].tick(dt);
@@ -302,7 +310,7 @@ engine.prototype = {
     start: function()
     {
         var that = this;
-		this.user = new biplane(this.ctx, "images/bp1.png", "images/bullet.png"); 
+		this.user = new biplane(this.ctx, "images/biplan1.png", "images/bullet.png"); 
         this.paused = false;
         this.redraw();
 		setTimeout(
