@@ -143,7 +143,7 @@ function Biplane(ctx, img_bp, img_bullet, orient, bullets) {
 			this.F = this.health;
 		}
 		var Fx = this.F * Math.cos(this.angle*Math.PI/6) ;
-		var Fy = -this.F * Math.sin(this.angle*Math.PI/6) + this.weight * G;
+		var Fy = -this.F * Math.sin(this.angle*Math.PI/6) + ((Math.abs(this.V) > 80 && this.vy >= 0) ? 0 : this.weight * G);
 		
 		// dV = sqrt( (2F)/(dt*m) )
 		this.vx += Math.sqrt( 2*Math.abs(Fx)/(dt*this.weight) ) * Math.sign(Fx);
@@ -162,9 +162,9 @@ function Biplane(ctx, img_bp, img_bullet, orient, bullets) {
 	
 		// aerodynamic breaking...
 		var t = Math.abs(this.angle - this.dir);
-		if ((t<6 ? t : 12-t) >= 2) {
+		if ((t<6 ? t : 12-t) >= 2) { // if direction of speed and biplan's orientation are differ
 			this.airRes = 0.01*this.V*this.V;
-			this.isFlying = false;
+			this.isFlying = false;	// falling
 		} else if (this.V > 50) { // ...or flying up!
 			this.isFlying = true;
 		}
@@ -173,6 +173,10 @@ function Biplane(ctx, img_bp, img_bullet, orient, bullets) {
 			this.V -= this.airRes*dt;
 			this.vx = this.V * Math.cos(this.dir*Math.PI / 6);
 			this.vy = -this.V * Math.sin(this.dir*Math.PI / 6);		
+		} else {
+			this.V -= 10*dt; // just decrease speed (air resistance)
+			this.vx = this.V * Math.cos(this.dir*Math.PI / 6);
+			this.vy = -this.V * Math.sin(this.dir*Math.PI / 6);
 		}
 
 		this.X += this.vx*dt;
@@ -198,19 +202,35 @@ function Biplane(ctx, img_bp, img_bullet, orient, bullets) {
 			this.X = 0;
 			//this.vx = 0;
 		}
-		if (this.Y >= 450 - this.heigth)
-			if (this.isSky)	{
-				this.isAlive = false;
-				console.log("BOOOM!");
-			} else {
+		if (this.Y >= 450 - this.heigth) {
+			if (this.vy < 2) {
+				this.isSky = false;
+			}
+		}
+		if (this.Y >= 450 - this.heigth)	// if we're very low
+			if (this.isSky)	{  					// if we're flying
+				if (this.vy < 5 && this.angle == (this.orient ? 0 : 1)*6) {	// if falling is very slow and angle equals 0 (or 6)
+					this.isSky = false;					// just landing
+				} else {							// else leaving this world :'-(
+					this.isAlive = false;
+					console.log("BOOOM!");
+				}
+			} else {							// else don't takeoff
 				if (this.vy > 0) {
-					this.vy = 0;
+					//this.vy = 0;
 				}
 				this.Y = 450 - this.heigth;
 			}
 		if (this.reload < this.reloadTime) {
 			this.reload += dt;
 		}
+	}
+	
+	this.AI = function() {
+		// 1. detecting enemy's position
+		// 2. if the angle between Comp's direction and enemy is small then fire
+		// 3. else if this.Y > enemy.Y then Up!
+		// 4. 	   else if this.Y < minHeight
 	}
 }
 
@@ -243,7 +263,7 @@ engine.prototype = {
     pause: function()
     {
         this.paused = !this.paused;
-        this.redraw();
+//        this.redraw();
     },
     keyPress: function(key) {
         switch (key)
@@ -285,7 +305,7 @@ engine.prototype = {
 				if (this.user2)
 					this.user2.rotate(-1);
                 break;
-            case 190: // >.
+            case 32: // space
                 if (this.user2)
 					this.user2.shot();
                 break;
@@ -304,9 +324,6 @@ engine.prototype = {
         });
         $(this.domElement).css('cursor','pointer');
         this.ctx = dom_element.getContext('2d');
-		this.ctx.font = "bold 24px sans-serif";
-		this.ctx.fillStyle = "#ddd";
-		this.ctx.textAlign = "center";
 		
 		this.images['bg'] = new Image();
 		this.images['bg'].src = 'images/bg.png';
@@ -316,6 +333,8 @@ engine.prototype = {
 		this.images['bp2'].src = 'images/biplan2.png';
 		this.images['bullet'] = new Image();
 		this.images['bullet'].src = 'images/bullet.png';
+		this.images['smoke'] = new Image();
+		this.images['smoke'].src = 'images/smoke.png';
 		this.images['explosion'] = new Image();
 		this.images['explosion'].src = 'images/explosion.png';
 		this.images['heart'] = new Image();
@@ -329,11 +348,12 @@ engine.prototype = {
 		this.audio.fly_stop = new Audio('sounds/fly_stop.ogg');
 		this.audio.explode = new Audio('sounds/explode.ogg');
 		
-		$('#start').click(function(){
-			that.start();
-		});
+		//$('#start').click(function(){
+			//that.start();
+		//});
 
         this.timer = setInterval( function() { that.ontimer() }, "50" );
+		that.start();
     },
 	
     redraw: function()
@@ -347,6 +367,9 @@ engine.prototype = {
         this.ctx.drawImage(this.images['bg'], 0, 0);
 		
 		// game score
+		this.ctx.font = "bold 24px sans-serif";
+		this.ctx.fillStyle = "#ddd";
+		this.ctx.textAlign = "center";
 		this.ctx.fillText(this.scores.user1+" - "+this.scores.user2, 320, 40);
 		
 		for (var i = 0; i < this.bullets.length; i++) {
@@ -378,8 +401,9 @@ engine.prototype = {
 			if (!this.user1.isAlive) {
 				this.audio.fly_high1.pause();
 				this.audio.fly_high2.pause();
+				this.audio.explode.currentTime=0;
 				this.audio.explode.play();
-				this.animations.push(new Animation(this.ctx, this.images['explosion'], 64, 0.2, this.user1.X, this.user1.Y));
+				this.animations.push(new Animation(this.ctx, this.images['explosion'], 64, 0.2, this.user1.X, this.user1.Y-40));
 				this.user1 = null;
 				this.user1Resp = 0;
 				this.scores.user2++;
@@ -387,6 +411,7 @@ engine.prototype = {
 				for (var i = 0; i < this.user1.health; i++) {
 					this.ctx.drawImage(this.images['heart'], 5 + i*(this.images['heart'].width + 5), 5);
 				}
+				//this.animations.push(new Animation(this.ctx, this.images['smoke'], 40, 0.1*(3-this.user1.health), this.user1.X, this.user1.Y));
 				this.user1.draw();
 			}
 		} else {
@@ -401,8 +426,9 @@ engine.prototype = {
 			if (!this.user2.isAlive) {
 				this.audio.fly_high1.pause();
 				this.audio.fly_high2.pause();
+				this.audio.explode.currentTime=0;
 				this.audio.explode.play();
-				this.animations.push(new Animation(this.ctx, this.images['explosion'], 64, 0.1, this.user2.X, this.user2.Y));
+				this.animations.push(new Animation(this.ctx, this.images['explosion'], 64, 0.2, this.user2.X, this.user2.Y-40));
 				this.user2 = null;
 				this.user2Resp = 0;
 				this.scores.user1++;
@@ -410,6 +436,7 @@ engine.prototype = {
 				for (var i = 0; i < this.user2.health; i++) {
 					this.ctx.drawImage(this.images['heart'], 635 - (i+1)*(this.images['heart'].width + 5), 5);
 				}
+				
 				this.user2.draw();
 			}
 		} else {
@@ -440,7 +467,11 @@ engine.prototype = {
 			this.biplanes[i].step(dt);
 			this.biplanes[i].draw();
 		}
+		
+		// debug data
 		/*
+		this.ctx.font = "12px sans-serif";
+		this.ctx.textAlign = "left";
 		if (this.user2 != null) {
 			this.ctx.fillText('Speed: '+this.user2.V+' ('+this.user2.vx+', '+this.user2.vy+')', 5, 20);
 			this.ctx.fillText('Pos: ('+this.user2.X+', '+this.user2.Y+')', 5, 40);
@@ -449,9 +480,6 @@ engine.prototype = {
 			this.ctx.fillText('Sky/Fly/Alive: '+this.user2.isSky+'/'+this.user2.isFlying+'/'+this.user2.isAlive, 5, 100);
 		}
 		*/
-        if (this.paused) {
-            this.ctx.fillText("Press SpaceBar to play!", 10, this.ctx.height - 20);
-        }
     },
 	
     ontimer: function()
